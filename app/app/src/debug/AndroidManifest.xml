@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  개발용 판에만 들어가는 것 — **배포판(release)에는 병합되지 않는다.**
+
+  왜 이 파일이 생겼나: 탐침(`VehicleProbe`)은 "어떤 차 신호가 이 차에서 실제로 오는가"를
+  재는 도구다(SDK_FACTS 7.5.1). 재고 나면 지워야 하는데 2026-11-02 에 "나중에 지우자"고
+  미뤄 뒀고, 그 뒤로 **내보내기가 막혀 있었다.**
+
+  지우면 도구를 잃고, 두면 배포판에 섞인다. 그래서 **옮겼다** —
+  소스는 `src/debug/` 에 남고, release 빌드에는 클래스도 권한도 들어가지 않는다.
+  사람이 기억하는 대신 **빌드 시스템이 보증한다**(`tools/export_github.py` 가 만들어진 APK 를 열어 확인).
+
+  ⛔ 여기 적는 권한은 **재 보기 위한 것**이다. 이야기에 실제로 쓰는 권한은 main 쪽에 적는다.
+     도메인마다 권한이 따로라서, 선언하지 않으면 "지원 안 함"과 "권한 없음"이 구별되지 않는다.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="pleos.car.permission.CAR_DOORS" />
+    <uses-permission android:name="pleos.car.permission.CAR_SAFETY" />
+    <uses-permission android:name="pleos.car.permission.CAR_MIRRORS" />
+    <uses-permission android:name="pleos.car.permission.CAR_CLIMATE" />
+    <uses-permission android:name="pleos.car.permission.CAR_TOLL" />
+
+    <application>
+        <!-- 🔎 신호 탐침. 실행: adb shell am start -n kr.sidelab.donghwa/.VehicleProbe
+                          읽기: adb logcat -s DonghwaProbe -->
+        <activity
+            android:name=".VehicleProbe"
+            android:exported="true"
+            android:label="신호 탐침" />
+    </application>
+</manifest>

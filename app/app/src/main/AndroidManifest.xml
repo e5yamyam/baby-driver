@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 차량 전용 앱 -->
+    <uses-feature android:name="android.hardware.type.automotive" android:required="true" />
+
+    <!-- Pleos: 내비 정보 조회 / 차량 상태 조회 -->
+    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
+    <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH" />
+    <uses-permission android:name="pleos.car.permission.CAR_DRIVE" />
+    <uses-permission android:name="pleos.car.permission.CAR_ENERGY" />
+    <uses-permission android:name="pleos.car.permission.CAR_INFO" />
+    <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
+    <!-- 여기부터는 **이야기에 실제로 배선한 신호**의 권한이다(SDK_FACTS 7.5.2).
+         재 보려고 선언했던 나머지(DOORS·SAFETY·MIRRORS·CLIMATE·TOLL)는 탐침과 함께
+         `src/debug/AndroidManifest.xml` 로 옮겼다 — **배포판에는 안 들어간다.**
+         쓰지 않는 권한을 선언한 채로 내는 건 차량 앱에서 그 자체로 흠이다. -->
+    <uses-permission android:name="pleos.car.permission.CAR_WINDOWS" />  <!-- 창문=바람 · 와이퍼=비 -->
+    <uses-permission android:name="pleos.car.permission.CAR_SEATS" />    <!-- 뒷좌석=동승 -->
+    <uses-permission android:name="pleos.car.permission.CAR_LIGHTS" />   <!-- 깜빡이=지금 꺾는다 -->
+    <!-- LLM 은 아직 안 쓴다. 쓰지 않는 권한은 내보내는 판에 두지 않는다
+         (2026-11-01 탐침 LlmProbe 와 함께 걷어냄 — 콜백 등록까지 확인해 둔 기록은 SDK_FACTS 7.8). -->
+
+    <!-- 화면 없이 이야기를 이어 가기 위한 포그라운드 서비스.
+         내비와 같은 창을 쓰므로 주행 중엔 화면을 가져오지 않는다(실측 [853,90]~[2535,1300]). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- 차 전원을 켜면 이야기 서비스를 올린다(목적지가 없으면 조용하다) -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- AAOS 표준: 속도 (Vehicle SDK v2.3.2 에서 VehicleSpeedListener 가 삭제됐다) -->
+    <uses-permission android:name="android.car.permission.CAR_SPEED" />
+    <uses-permission android:name="android.car.permission.CAR_POWERTRAIN" />
+
+    <!-- 아이콘이 없으면 차 앱 목록에 **안드로이드 기본 로봇**으로 뜬다(2026-11-03 실측).
+         앱을 켜기 전에 보이는 유일한 그림이라, 앱 안의 손님 그림을 그대로 쓴다
+         (`tools/make_icon.py`). -->
+    <application
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:theme="@style/Theme.AppCompat.NoActionBar">
+
+        <uses-library android:name="android.car" android:required="false" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <!-- 이게 없으면 주행 중에는 앱을 쓸 수 없다(주차 중만 가능) -->
+            <meta-data android:name="distractionOptimized" android:value="true" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 이야기 본체. 화면이 꺼져 있어도, 지도가 떠 있어도 여기서 돈다. -->
+        <service
+            android:name=".StoryService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <!-- 책장. distractionOptimized 를 **일부러 선언하지 않는다** —
+             그러면 주행·신호대기 중에는 시스템이 막아 주고, 주차 중에만 열린다. -->
+        <activity
+            android:name=".BookActivity"
+            android:exported="true"
+            android:label="책장" />
+        <!-- 아이 설정. 책장과 같은 이유로 **distractionOptimized 를 선언하지 않는다** —
+             글자 입력은 주행 중에 허용되지 않으므로 막는 일을 플랫폼에 맡긴다. -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="true"
+            android:label="아이 설정"
+            android:windowSoftInputMode="adjustResize" />
+
+        <!-- 전원 켜짐 -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+</manifest>

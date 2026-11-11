@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 고른 칸은 종이색 바탕이라 글자가 어두워야 하고, 안 고른 칸은 어두운 바탕이라 밝아야 한다. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_selected="true" android:color="#2E2922" />
+    <item android:color="#D9FFF7EC" />
+</selector>
