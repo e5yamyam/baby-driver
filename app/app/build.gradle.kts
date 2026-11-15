@@ -66,8 +66,12 @@ dependencies {
     implementation("ai.pleos.playground:NaviHelper:3.0.5")
     implementation("ai.pleos.playground:Vehicle:2.3.2")
     implementation("ai.pleos.playground:TextToSpeech:3.3.1")
-    // LLM:2.1.3.2 — 콜백 등록까지 확인했지만(SDK_FACTS 7.8) 아직 쓰지 않는다.
-    // 쓰지 않는 의존성을 배포판에 넣지 않는다. 쓸 때 다시 넣는다.
+    // LLM 은 공모전 공식 SDK 목록(FAQ)에 없는 아티팩트지만 **넣어야 한다.**
+    // ⛔ 2026-11-16 실측: 안 넣었더니 [PleosBackend] 가 ClassNotFoundException 으로 떨어져
+    //    **어느 차에서도 생성이 안 됐다.** 클라이언트 라이브러리는 APK 안에 있어야 한다.
+    //    리플렉션으로 잡는 건 '없을 때' 가 아니라 **판이 달라 메서드가 바뀌었을 때**
+    //    NoSuchMethodError 로 앱이 죽지 않게 하려는 장치다.
+    implementation("ai.pleos.playground:LLM:2.1.3.2")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     testImplementation("junit:junit:4.13.2")

@@ -36,6 +36,14 @@ class StoryDirector(
      *    [Engine.timeOfDayNow] 를 그대로 받아서 **화면과 같은 값**을 쓴다.
      */
     private val sky: () -> TimeOfDay = { TimeOfDay.DAY },
+    /**
+     * **문장의 위층 — 생성.** 기본은 [StoryWriter.None] 이라 내장 이야기만 나간다.
+     *
+     * 이 층이 하는 일은 **그 자리에 나갈 문장을 바꾸는 것뿐**이다. 어느 쪽을 언제 읽을지,
+     * 멀미 안내를 언제 끼울지는 전부 이 클래스가 그대로 쥔다 — 그래서 생성이 붙든 안 붙든
+     * 책의 순서와 박자는 한 글자도 달라지지 않는다.
+     */
+    private val writer: StoryWriter = StoryWriter.None,
 ) {
     /**
      * 밖으로 내보내는 결과. 화면과 음성이 같은 걸 쓴다.
@@ -648,6 +656,28 @@ class StoryDirector(
     private fun peek(ep: Episode): BookPage? = peekIdx(ep)?.let { ep.pages[it] }
 
     /**
+     * **한 구간 앞의 쪽을 생성에 미리 걸어 둔다.** 접수 서류 5항의 "주행 중에는 한 구간 앞의
+     * 장면을 미리 생성해 둔다 — 아이가 기다리는 시간이 생기지 않는다" 가 이 함수다.
+     *
+     * 쪽을 하나 읽을 때마다 불린다. 이미 캐시에 있거나 날아간 요청은 [StoryWriter] 가 거른다.
+     * 뼈대([BookPage.core])는 넘기지 않는다 — 인과가 거기 걸려 있어 다시 쓰면 안 된다.
+     */
+    private fun prefetch(ep: Episode) {
+        if (writer === StoryWriter.None) return
+        val at = peekIdx(ep) ?: return
+        val reqs = ArrayList<StoryWriter.Request>(PREFETCH_PAGES)
+        var i = at
+        while (i < ep.pages.size && reqs.size < PREFETCH_PAGES) {
+            val pg = ep.pages[i]
+            if (i !in readIdx && !pg.core && !(shortRide && !pg.core)) {
+                reqs += StoryWriter.Request(pg.text, pg.scene, pg.core)
+            }
+            i += 1
+        }
+        if (reqs.isNotEmpty()) writer.prepare(reqs)
+    }
+
+    /**
      * **쪽 간격을 도착 시각이 정한다.** 남은 시간을 남은 쪽 수로 나눈다.
      * 이게 "도착할 때까지 딱 맞게 끝나는 이야기"의 실제 구현이다 —
      * 정체로 늦어지면 천천히 읽고, 빨라지면 당겨 읽는다.
@@ -721,6 +751,8 @@ class StoryDirector(
         }
         lastSpokeAt = now()
         seenScenes += sc
+        // 한 쪽을 읽었으니 다음 쪽들을 미리 생성에 걸어 둔다(아이가 기다리지 않게).
+        prefetch(ep)
         return Beat(fill(line, g, here = lastPlace), keep = true, scene = sc, voiced = true)
     }
 
@@ -905,7 +937,21 @@ class StoryDirector(
         if (!beat.keep && t - lastSpokeAt < level.gapMs) return null
         val voiced = voice(beat) ?: return null
         lastSpokeAt = t
-        return voiced
+        return rewritten(voiced)
+    }
+
+    /**
+     * 미리 만들어 둔 생성 문장이 있으면 갈아 끼운다. 없으면 내장 문장 그대로.
+     *
+     * ⛔ **여기서 기다리지 않는다.** 이 경로는 차 이벤트를 받는 스레드다 —
+     *    한 번 멈추면 멀미 선행 안내가 커브보다 늦게 나간다([StoryWriter] 주석).
+     * ⛔ **급한 말은 생성에 맡기지 않는다.** 흔들림 안내는 방향과 세기가 정확해야 하는
+     *    안전 기능이라, 다시 쓴 문장이 들어갈 자리가 아니다.
+     */
+    private fun rewritten(beat: Beat): Beat {
+        if (beat.urgent) return beat
+        val made = writer.ready(beat.line) ?: return beat
+        return beat.copy(line = made)
     }
 
     /**
@@ -1259,6 +1305,9 @@ class StoryDirector(
 
         /** 3~4세가 한 호흡에 받는 길이. 넘으면 그 자리에서 놓친다. */
         const val TODDLER_MAX_CHARS = 35
+
+        /** 몇 쪽 앞까지 미리 생성해 둘지. 많이 잡으면 안 쓸 문장을 만드느라 느려진다. */
+        const val PREFETCH_PAGES = 2
 
 
         /**

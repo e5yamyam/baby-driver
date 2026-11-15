@@ -11,6 +11,11 @@
     <uses-permission android:name="pleos.car.permission.CAR_ENERGY" />
     <uses-permission android:name="pleos.car.permission.CAR_INFO" />
     <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
+    <!--
+      LLM 생성용. 설치만으로 granted 되는 Pleos 권한 계열이다(SDK_FACTS 7.10 실측).
+      ⛔ 권한이 있어도 에뮬레이터는 추론이 꺼져 있다 — 그래서 LlmWriter 가 차단기를 들고 있다.
+    -->
+    <uses-permission android:name="pleos.car.permission.LLM_SERVICE" />
     <!-- 여기부터는 **이야기에 실제로 배선한 신호**의 권한이다(SDK_FACTS 7.5.2).
          재 보려고 선언했던 나머지(DOORS·SAFETY·MIRRORS·CLIMATE·TOLL)는 탐침과 함께
          `src/debug/AndroidManifest.xml` 로 옮겼다 — **배포판에는 안 들어간다.**

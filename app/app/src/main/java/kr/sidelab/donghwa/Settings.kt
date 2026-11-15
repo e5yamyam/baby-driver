@@ -15,6 +15,7 @@ object Settings {
     private const val DEFAULT_NAME = "아이"
     private const val KEY_AGE = "child_age"
     private const val DEFAULT_AGE = 5
+    private const val KEY_LLM = "llm_on"
 
     fun childName(context: Context): String =
         prefs(context).getString(KEY_NAME, DEFAULT_NAME)?.takeIf { it.isNotBlank() } ?: DEFAULT_NAME
@@ -28,6 +29,20 @@ object Settings {
 
     fun setChildAge(context: Context, age: Int) {
         prefs(context).edit().putInt(KEY_AGE, age.coerceIn(2, 12)).apply()
+    }
+
+    /**
+     * **AI 생성을 쓸 것인가.** 기본값은 켜짐이다 — 차에 LLM 이 있으면 쓰고, 없으면
+     * [LlmWriter] 가 알아서 내장 이야기로 떨어진다.
+     *
+     * 끌 수 있게 둔 이유: 시연과 검증에서 **생성이 끼지 않은 판**을 봐야 할 때가 있다.
+     * 전사를 원고와 글자 단위로 대조하려면 생성이 꺼져 있어야 한다.
+     *   adb shell am start ... --ez llm false
+     */
+    fun generateOn(context: Context): Boolean = prefs(context).getBoolean(KEY_LLM, true)
+
+    fun setGenerateOn(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean(KEY_LLM, on).apply()
     }
 
     private fun prefs(context: Context) =

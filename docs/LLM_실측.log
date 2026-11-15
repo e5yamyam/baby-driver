@@ -1,0 +1,48 @@
+# 베이비드라이버 — LLM 생성 경로 실측 로그
+# Pleos Connect Emulator v2.1.0 / release APK(v3 서명) / 2026-11-16
+# 우리 스레드 이름 donghwa-llm · 우리 태그 DonghwaLlm
+
+11-15 07:54:00.376 I/[CAAS][SDK]LLM(26815): [donghwa-llm]initialize
+11-15 07:54:00.376 I/[CAAS][SDK]LLMServiceManager(26815): [donghwa-llm]createLLM ON_DEVICE
+11-15 07:54:00.380 I/[CAAS][SDK]OnDeviceLLM(26815): [donghwa-llm]initialize kr.sidelab.donghwa
+11-15 07:54:00.388 I/[CAAS][SDK]OnDeviceLLM(26815): [donghwa-llm]connectService
+11-15 07:54:00.388 I/[CAAS][SDK]OnDeviceLLM(26815): [donghwa-llm]initialize kr.sidelab.donghwa
+11-15 07:54:00.389 I/[CAAS][SDK]LLM(26815): [donghwa-llm]generateContent
+11-15 07:54:00.389 I/[CAAS][SDK]OnDeviceLLM(26815): [donghwa-llm]generateContent kr.sidelab.donghwa
+11-15 07:54:00.389 I/[CAAS][SDK]LLM(26815): [donghwa-llm]generateContent
+11-15 07:54:00.389 I/[CAAS][SDK]OnDeviceLLM(26815): [donghwa-llm]generateContent kr.sidelab.donghwa
+11-15 07:54:00.390 I/[GAAS]LLMService( 2755): [DefaultDispatcher-worker-4]>> initializeConnectGlobalMode isConnectGlobalMode: false, isNoLLM: false
+11-15 07:54:00.390 I/[GAAS]LLMService( 2755): [DefaultDispatcher-worker-4]onCreate - llmActivation: true
+11-15 07:54:00.390 I/[GAAS]LLMService( 2755): [main]onBind - intent action: ai.pleos.playground.caas.intent.action.LLM_ON_DEVICE_START
+11-15 07:54:00.391 I/[GAAS]LLMService( 2755): [DefaultDispatcher-worker-4]BroadcastReceivers registered successfully
+11-15 07:54:00.467 D/[CAAS][SDK]OnDeviceLLM(26815): [main]getLLMService: onServiceConnected
+11-15 07:54:00.468 D/[CAAS][SDK]OnDeviceLLM(26815): [main]getLLMService: onServiceConnected
+11-15 07:54:00.490 I/[GAAS]OnDeviceLLMBinder( 2755): [binder:2755_4]registerCallback kr.sidelab.donghwa
+11-15 07:54:00.490 I/[GAAS]LLMCallbackManagerImpl( 2755): [binder:2755_4]registerCallback kr.sidelab.donghwa
+11-15 07:54:00.490 I/[GAAS]OnDeviceLLMBinder( 2755): [binder:2755_4]startLLM
+11-15 07:54:00.490 I/[GAAS]OnDeviceLLMManagerImpl( 2755): [binder:2755_4][onDeviceLLM] startLLM ignored: on-device LLM is disabled
+11-15 07:54:00.490 I/[GAAS]OnDeviceLLMBinder( 2755): [binder:2755_4]initialize kr.sidelab.donghwa
+11-15 07:54:00.490 I/[GAAS]OnDeviceLLMManagerImpl( 2755): [binder:2755_4][onDeviceLLM] initialize(kr.sidelab.donghwa) ignored: on-device LLM is disabled
+11-15 07:54:00.491 I/[GAAS]OnDeviceLLMBinder( 2755): [binder:2755_4]registerCallback kr.sidelab.donghwa
+11-15 07:54:00.491 I/[GAAS]LLMCallbackManagerImpl( 2755): [binder:2755_4]registerCallback kr.sidelab.donghwa
+11-15 07:54:00.491 I/[GAAS]OnDeviceLLMBinder( 2755): [binder:2755_4]startLLM
+11-15 07:54:00.491 I/[GAAS]OnDeviceLLMManagerImpl( 2755): [binder:2755_4][onDeviceLLM] startLLM ignored: on-device LLM is disabled
+11-15 07:54:00.491 I/[GAAS]OnDeviceLLMBinder( 2755): [binder:2755_4]initialize kr.sidelab.donghwa
+11-15 07:54:00.491 I/[GAAS]OnDeviceLLMManagerImpl( 2755): [binder:2755_4][onDeviceLLM] initialize(kr.sidelab.donghwa) ignored: on-device LLM is disabled
+11-15 07:54:00.491 I/[GAAS]OnDeviceLLMBinder( 2755): [binder:2755_4]registerCallback kr.sidelab.donghwa
+11-15 07:54:00.491 I/[GAAS]LLMCallbackManagerImpl( 2755): [binder:2755_4]registerCallback kr.sidelab.donghwa
+11-15 07:54:00.491 I/[GAAS]OnDeviceLLMBinder( 2755): [binder:2755_4]startLLM
+11-15 07:54:00.491 I/[GAAS]OnDeviceLLMManagerImpl( 2755): [binder:2755_4][onDeviceLLM] startLLM ignored: on-device LLM is disabled
+11-15 07:54:04.405 I/DonghwaLlm(26815): 생성 타임아웃 4000ms — 내장 문장으로
+11-15 07:54:04.406 I/DonghwaLlm(26815): 생성 타임아웃 4000ms — 내장 문장으로
+11-15 07:54:08.667 I/[CAAS][SDK]LLM(26815): [donghwa-llm]generateContent
+11-15 07:54:08.667 I/[CAAS][SDK]OnDeviceLLM(26815): [donghwa-llm]generateContent kr.sidelab.donghwa
+11-15 07:54:08.667 I/[CAAS][SDK]LLM(26815): [donghwa-llm]generateContent
+11-15 07:54:08.667 I/[CAAS][SDK]OnDeviceLLM(26815): [donghwa-llm]generateContent kr.sidelab.donghwa
+11-15 07:54:12.658 I/DonghwaLlm(26815): 생성 타임아웃 4000ms — 내장 문장으로
+11-15 07:54:12.658 I/DonghwaLlm(26815): 생성 3회 연속 실패 — 이 주행에서는 내장 이야기로만 간다
+11-15 07:54:12.658 I/[CAAS][SDK]LLM(26815): [donghwa-llm-timeout]release
+11-15 07:54:12.658 I/[CAAS][SDK]OnDeviceLLM(26815): [donghwa-llm-timeout]disconnectService
+11-15 07:54:12.658 I/[CAAS][SDK]OnDeviceLLM(26815): [donghwa-llm-timeout]unregisterCallback kr.sidelab.donghwa
+11-15 07:54:12.658 I/[GAAS]OnDeviceLLMBinder( 2755): [binder:2755_6]unregisterCallback
+11-15 07:54:12.658 I/[GAAS]LLMCallbackManagerImpl( 2755): [binder:2755_6]unregisterCallback

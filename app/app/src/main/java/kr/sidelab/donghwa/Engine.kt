@@ -22,6 +22,9 @@ object Engine {
     private var director = StoryDirector()
     private var journal: Journal? = null
 
+    /** 문장의 위층. 주행마다 새로 만들고 도착에서 닫는다. */
+    private var writer: StoryWriter = StoryWriter.None
+
     /** 그림의 세계. 시즌이 정한다 — 바다 시즌이면 길이 물길이 되고 차가 배가 된다. */
     var theme: SceneTheme = SceneTheme.SEA
         private set
@@ -110,6 +113,9 @@ object Engine {
         val j = journal ?: Journal(ctx).also { journal = it }
         val season = Season.of(j.seasonId)
         theme = season.theme
+        // 앞 주행의 생성층은 여기서 닫는다 — 스레드가 쌓이면 안 된다.
+        runCatching { writer.close() }
+        writer = makeWriter(ctx, season)
         director = StoryDirector(
             childName = Settings.childName(ctx),
             journal = j,
@@ -118,6 +124,7 @@ object Engine {
             // 여는 줄의 `{때}`. 그림의 하늘과 **같은 함수**를 쓴다 — 밤 그림에 "아침이야" 가 붙으면
             // 그 자리에서 동화가 깨진다(시연은 `--es sky night` 으로 하늘을 바꾼다).
             sky = ::timeOfDayNow,
+            writer = writer,
         )
 
         if (narrator == null) {
@@ -240,6 +247,34 @@ object Engine {
         fireUpdate()
     }
 
+    /**
+     * 생성층을 만든다. 꺼져 있으면 [StoryWriter.None] — 내장 이야기만 나간다.
+     *
+     * ⛔ 여기서 "차에 LLM 이 있나" 를 미리 묻지 않는다. 물어볼 방법이 없기 때문이다 —
+     *    에뮬레이터는 권한도 주고 바인드도 되는데 **추론만 조용히 안 된다**(SDK_FACTS 7.10).
+     *    그래서 **일단 켜고, 세 번 실패하면 스스로 꺼지게** 했다([LlmWriter.GIVE_UP_AFTER]).
+     */
+    private fun makeWriter(ctx: Context, season: Season): StoryWriter {
+        if (!Settings.generateOn(ctx)) {
+            Log.i(TAG, "생성 꺼짐 — 내장 이야기로 간다")
+            return StoryWriter.None
+        }
+        return runCatching {
+            LlmWriter(
+                childName = Settings.childName(ctx),
+                guestName = season.guest.name,
+                vehicle = season.vehicle,
+                level = AgeLevel.of(Settings.childAge(ctx)),
+                destination = { recording?.destination },
+                minutesLeft = { recording?.minutes },
+                backend = PleosBackend(ctx),
+            )
+        }.getOrElse {
+            Log.w(TAG, "생성층 생성 실패(${it.message}) — 내장 이야기로 간다")
+            StoryWriter.None
+        }
+    }
+
     /** 책의 겉면(목적지·길이·지나온 곳)은 대사가 아니라 이벤트에서 가져온다. */
     private fun record(event: CarEvent) {
         when (event) {
@@ -276,6 +311,9 @@ object Engine {
         val r = recording ?: return
         recording = null
         journal?.nextEpisode()
+        // 주행이 끝났다 — 생성층의 스레드와 캐시를 놓는다. 다음 출발에서 새로 만든다.
+        runCatching { writer.close() }
+        writer = StoryWriter.None
         val book = r.toBook()
         if (Library.save(ctx, book)) {
             bookCount = Library.count(ctx)
