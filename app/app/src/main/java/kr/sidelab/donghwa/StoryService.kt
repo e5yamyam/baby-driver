@@ -85,6 +85,13 @@ class StoryService : Service() {
         intent?.getStringExtra("name")?.takeIf { it.isNotBlank() }
             ?.let { Settings.setChildName(this, it) }
         intent?.getIntExtra("age", 0)?.takeIf { it > 0 }?.let { Settings.setChildAge(this, it) }
+        // ⚠️ 여기는 **늦다.** `onCreate` 가 이미 `Engine.start` 를 불렀고 거기서 생성층이 만들어진다.
+        //    그래서 이 줄은 **다음 주행부터** 먹는다 — 정본은 `MainActivity`(서비스보다 먼저 돈다)다.
+        //    서비스를 직접 띄우는 길(개발용)을 위해 남겨 둔다.
+        if (intent?.getBooleanExtra("gen", false) == true) {
+            Settings.setDemoGenerateOn(this, true)
+            Log.i(TAG, "⚠️ 시연 모드 — 미리 만들어 둔 생성문을 읽는다(이번 주행에 안 먹으면 MainActivity 로 켤 것)")
+        }
         if (intent?.getBooleanExtra("route", false) == true) Engine.requestDemoRoute()
         if (intent?.getBooleanExtra("demo", false) == true) {
             Engine.startDemo(

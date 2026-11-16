@@ -19,7 +19,7 @@ class GenReachTest {
     /** 무엇을 물어도 아이에게 보내도 되는 한 문장을 준다. 필터를 전부 지나는 길이·내용이다. */
     private class 되는차 : LlmWriter.Backend {
         val 받은지시 = mutableListOf<String>()
-        override fun generate(system: String, user: String, timeoutMs: Long, onDone: (String?) -> Unit) {
+        override fun generate(key: String, system: String, user: String, timeoutMs: Long, onDone: (String?) -> Unit) {
             받은지시 += user
             onDone(만든문장)
         }
@@ -102,12 +102,45 @@ class GenReachTest {
         assertTrue("세 살에게는 짧은 판(short)이 나가는데 생성은 본문(text)으로 걸려 있다", 생성줄 > 0)
     }
 
+    /** 부르면 그 자리에서 터지는 생성기. 진짜로 그런 일이 있었다. */
+    private class 터지는차 : LlmWriter.Backend {
+        var 불린횟수 = 0
+        override fun generate(key: String, system: String, user: String, timeoutMs: Long, onDone: (String?) -> Unit) {
+            불린횟수++
+            throw IllegalStateException("기기에서만 터지는 종류의 사고")
+        }
+        override fun close() = Unit
+    }
+
+    /**
+     * 🔴 **생성층이 터져도 이야기는 끝까지 간다.**
+     *
+     * 2026-11-17, `ChildFilter` 의 정규식이 안드로이드에서 `PatternSyntaxException` 으로
+     * 터졌다. 그게 생성 전용 스레드에서 올라와 **앱 프로세스를 통째로 죽였고**, 아이는
+     * 첫 줄 하나만 듣고 끝났다. 이 층이 약속한 것은 그 반대다 —
+     * "생성이 안 되는 기계에서도 앱은 똑같이 돌아간다".
+     *
+     * 그래서 **터지는 생성기를 끼우고도 내장 이야기가 그대로 나오는지**를 센다.
+     */
+    @Test
+    fun 생성층이_터져도_이야기는_끝까지_간다() {
+        val 멀쩡 = 달린다(AgeLevel.KID, StoryWriter.None)
+        val 차 = 터지는차()
+        val 터진채 = 달린다(AgeLevel.KID, 생성층(차))
+        println("[터져도] 생성 호출 ${차.불린횟수}회 · 내장만 ${멀쩡.size}줄 · 터진 채 ${터진채.size}줄")
+        assertTrue("생성기를 부르지도 않았다면 이 검사가 아무것도 안 본 것이다", 차.불린횟수 > 0)
+        assertTrue(
+            "생성층이 터지자 이야기가 끊겼다 — 내장 ${멀쩡.size}줄 vs 터진 채 ${터진채.size}줄",
+            터진채 == 멀쩡,
+        )
+    }
+
     @Test
     fun 자리표시자가_든_쪽도_생성에_걸린다() {
         val 차 = 되는차()
         val w = 생성층(차)
         달린다(AgeLevel.KID, w)
-        val 자리표시자달린요청 = 차.받은지시.count { Regex("""\{[^}]{1,12}}""").containsMatchIn(it) }
+        val 자리표시자달린요청 = 차.받은지시.count { Regex("""\{[^}]{1,12}\}""").containsMatchIn(it) }
         println("[자리표시자] 생성 요청 ${차.받은지시.size} 건 중 자리표시자 남은 지시 ${자리표시자달린요청} 건")
         assertTrue(
             "생성 지시문에 `{아이}` 가 그대로 들어가면 모델이 그걸 지어내거나 " +

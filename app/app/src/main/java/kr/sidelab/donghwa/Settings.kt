@@ -17,6 +17,18 @@ object Settings {
     private const val DEFAULT_AGE = 5
     private const val KEY_LLM = "llm_on"
 
+    /**
+     * **시연 모드** — 미리 만들어 둔 생성문을 읽는다([CannedBackend]).
+     *
+     * 왜 토글인가: 2차 발표는 차 없이 하고, 차 밖에서는 온디바이스 LLM 이 꺼져 있어서
+     * 생성이 한 줄도 안 나온다. 그렇다고 **몰래 미리 만든 문장을 틀면 거짓말**이 된다.
+     *
+     * 그래서 ⑴ 기본 꺼짐 ⑵ **설정 화면에 없다** — `adb` 로 `--ez gen true` 를 줘야 켜진다.
+     * 쓰다가 실수로 켜지는 길이 없고, 켜지면 로그에 `⚠️ 시연 모드` 가 남는다.
+     * 양산기에서는 쓰지 않는다 — 거기선 그 자리에서 만드는 것이 맞다.
+     */
+    private const val KEY_DEMO_GEN = "demo_gen"
+
     fun childName(context: Context): String =
         prefs(context).getString(KEY_NAME, DEFAULT_NAME)?.takeIf { it.isNotBlank() } ?: DEFAULT_NAME
 
@@ -43,6 +55,14 @@ object Settings {
 
     fun setGenerateOn(context: Context, on: Boolean) {
         prefs(context).edit().putBoolean(KEY_LLM, on).apply()
+    }
+
+    /** 시연 모드. **기본 꺼짐** — 차에서는 그 자리에서 만드는 것이 맞다. */
+    fun demoGenerateOn(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_DEMO_GEN, false)
+
+    fun setDemoGenerateOn(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean(KEY_DEMO_GEN, on).apply()
     }
 
     private fun prefs(context: Context) =

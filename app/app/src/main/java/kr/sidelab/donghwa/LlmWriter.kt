@@ -80,8 +80,12 @@ class LlmWriter(
      * **한 줄도 검사할 수 없다**(그게 지금까지 이 기능이 없던 이유이기도 하다).
      */
     interface Backend {
-        /** @param onDone 성공하면 문장, 실패·타임아웃이면 null. 아무 스레드에서나 불릴 수 있다. */
-        fun generate(system: String, user: String, timeoutMs: Long, onDone: (String?) -> Unit)
+        /**
+         * @param key    그 쪽의 좌표(`시즌:화:쪽:나이`). 진짜 모델은 안 쓰지만
+         *               [CannedBackend] 는 **이걸로 미리 만들어 둔 답을 찾는다.**
+         * @param onDone 성공하면 문장, 실패·타임아웃이면 null. 아무 스레드에서나 불릴 수 있다.
+         */
+        fun generate(key: String, system: String, user: String, timeoutMs: Long, onDone: (String?) -> Unit)
         fun close()
     }
 
@@ -109,16 +113,32 @@ class LlmWriter(
             if (r.core) continue
             if (cache.containsKey(r.key) || !inFlight.add(r.key)) continue
             if (cache.size >= CACHE_MAX) { inFlight.remove(r.key); continue }
-            worker.execute { run(r) }
+            // 🔴 **여기서 새는 예외는 앱을 통째로 죽인다.** 전용 스레드에서 올라온 예외는
+            //    잡아 주는 사람이 없어 그대로 프로세스 종료로 간다 — 이야기가 한 줄 읽히고 끝났다
+            //    (2026-11-17, ChildFilter 의 정규식이 안드로이드에서만 터졌다).
+            //    이 층의 약속은 "생성이 안 돼도 앱은 똑같이 돈다" 이다. 그 약속을 코드로 못박는다.
+            worker.execute {
+                try {
+                    run(r)
+                } catch (t: Throwable) {
+                    inFlight.remove(r.key)
+                    if (givenUp.compareAndSet(false, true)) {
+                        Log.w(TAG, "생성층이 터졌다 — 이 주행은 내장 이야기로만 간다", t)
+                    }
+                }
+            }
         }
     }
 
     private fun run(r: StoryWriter.Request) {
         if (closed.get() || givenUp.get()) { inFlight.remove(r.key); return }
         val user = StoryPrompt.rewrite(r, destination(), minutesLeft())
-        backend.generate(system, user, TIMEOUT_MS) { out ->
+        backend.generate(r.key, system, user, TIMEOUT_MS) { out -> runCatching {
+            // ⚠️ 이 콜백은 **아무 스레드에서나** 불린다([Backend.generate] 계약).
+            //    [PleosBackend] 는 SDK 스레드나 타임아웃 시계에서 부르는데, 거기서 샌 예외도
+            //    앱을 죽인다. 위 `worker.execute` 의 try 로는 거기까지 못 막는다.
             inFlight.remove(r.key)
-            if (closed.get()) return@generate
+            if (closed.get()) return@runCatching
             if (out == null) {
                 // ⛔ 여기가 에뮬레이터가 떨어지는 자리다. 조용히 세고, 세 번이면 그만둔다.
                 val n = fails.incrementAndGet()
@@ -126,19 +146,24 @@ class LlmWriter(
                     Log.i(TAG, "생성 ${n}회 연속 실패 — 이 주행에서는 내장 이야기로만 간다")
                     backend.close()
                 }
-                return@generate
+                return@runCatching
             }
             fails.set(0)
             val safe = ChildFilter.check(out, r.original, level)
             if (safe == null) {
                 filtered.incrementAndGet()
                 Log.i(TAG, "필터에 걸림, 내장 문장으로: $out")
-                return@generate
+                return@runCatching
             }
             cache[r.key] = safe
             used.incrementAndGet()
             Log.i(TAG, "생성[${r.key}]: ${r.original} → $safe")
-        }
+        }.onFailure { t ->
+            inFlight.remove(r.key)
+            if (givenUp.compareAndSet(false, true)) {
+                Log.w(TAG, "생성 콜백이 터졌다 — 이 주행은 내장 이야기로만 간다", t)
+            }
+        } }
     }
 
     override fun close() {
@@ -196,7 +221,7 @@ class PleosBackend(private val context: Context) : LlmWriter.Backend {
         }
     }
 
-    override fun generate(system: String, user: String, timeoutMs: Long, onDone: (String?) -> Unit) {
+    override fun generate(key: String, system: String, user: String, timeoutMs: Long, onDone: (String?) -> Unit) {
         val obj = instance() ?: return onDone(null)
         // ⛔ **한 번만 부른다.** SDK 가 콜백을 안 주는 경우가 있어(on-device LLM is disabled)
         //    타임아웃과 콜백이 **둘 다** 올 수 있다. 먼저 온 쪽만 받는다.
@@ -245,4 +270,102 @@ class PleosBackend(private val context: Context) : LlmWriter.Backend {
         dead.set(true)
         timer.shutdownNow()
     }
+}
+
+/**
+ * **미리 만들어 둔 생성문을 읽어 주는 [LlmWriter.Backend]** — 시연용.
+ *
+ * ## 왜 필요한가
+ * 2차 발표는 **차 없이** 한다. 그런데 온디바이스 LLM 은 에뮬레이터·노트북에서 꺼져 있어서
+ * 거기서 돌리면 **생성이 한 줄도 안 나온다**(SDK_FACTS 7.10). 그러면 접수 서류가 내세운
+ * "AI 가 그날 주행에 맞는 문장을 쓴다" 를 **보여 줄 수가 없다.**
+ *
+ * 그래서 앱의 지시문([StoryPrompt])과 어린이 필터([ChildFilter])를 **코드 그대로** 돌려
+ * 받아 둔 답을 `assets/demo/생성문장.tsv` 에 넣고, 시연에서는 그것을 읽는다.
+ * 만드는 길은 `tools/gen_probe.py --canned` 이고, 받은 문장은 `docs/생성_실측.md` 에 그대로 있다.
+ *
+ * ## 거짓말이 되지 않게 지키는 것
+ * - **설정에서 사람이 켜야 한다**([Settings.demoGenerateOn], 기본 꺼짐). 몰래 켜지지 않는다.
+ * - **아이 이름이 시연 프로필과 다르면 아무 답도 안 한다.** 미리 만든 문장에는 시연 이름이
+ *   박혀 있으므로, 다른 이름을 쓰는 아이에게 **남의 이름을 읽어 주면 안 된다.**
+ * - 양산기에서는 이 백엔드를 쓰지 않는다 — 거기선 [PleosBackend] 가 그 자리에서 만든다.
+ */
+class CannedBackend(
+    context: Context,
+    /** 지금 설정된 아이 이름. 시연 프로필과 같을 때만 답한다. */
+    private val childName: () -> String,
+) : LlmWriter.Backend {
+
+    /** 읽어 들인 시연 파일. [forName] 이 그 파일을 만들 때 쓴 아이 이름이다. */
+    data class Canned(val forName: String?, val answers: Map<String, String>) {
+        companion object {
+            val EMPTY = Canned(null, emptyMap())
+        }
+    }
+
+    companion object {
+        const val TAG = "DonghwaLlm"
+        // ⛔ **ASCII 이름만 쓴다.** 맥은 파일 이름을 NFD 로 적고 코틀린 문자열은 NFC 라
+        //    한글 이름을 주면 `assets.open` 이 **못 찾는다** — 그러면 시연 모드를 켜도
+        //    아무 답이 없어 차단기가 돌고, 로그만 보면 "생성 0줄" 이라 원인이 안 보인다
+        //    (2026-11-17 첫 녹화가 그래서 생성 0줄로 나왔다).
+        const val PATH = "demo/canned.tsv"
+
+        /** 첫 줄에 적어 둔 시연 프로필 이름을 읽는 머리말. */
+        const val HEAD = "#이름\t"
+
+        /**
+         * 시연 파일을 읽는다. **순수 함수로 둔 이유는 검사 때문이다** —
+         * `Context` 가 필요하면 이 로직이 에뮬레이터 밖에서 한 줄도 안 돌아간다.
+         */
+        fun parse(lines: Sequence<String>): Canned {
+            var who: String? = null
+            val m = HashMap<String, String>()
+            for (ln in lines) {
+                if (ln.startsWith(HEAD)) { who = ln.removePrefix(HEAD).trim(); continue }
+                if (ln.isBlank() || ln.startsWith("#")) continue
+                val f = ln.split("\t")
+                if (f.size >= 2 && f[0].isNotBlank() && f[1].isNotBlank()) m[f[0]] = f[1].trim()
+            }
+            return Canned(who, m)
+        }
+
+        /**
+         * 그 열쇠의 답. **이름이 다르면 아무 답도 안 한다.**
+         *
+         * ⛔ 미리 만든 문장에는 시연 프로필 이름이 박혀 있다. 다른 이름을 쓰는 아이에게
+         *    그걸 읽어 주면 **남의 이름을 부르는 동화**가 된다 — 그럴 땐 내장 이야기가 나간다.
+         */
+        fun answer(canned: Canned, who: String, key: String): String? {
+            val made = canned.forName ?: return null
+            if (made != who) return null
+            return canned.answers[key]
+        }
+    }
+
+    private val canned: Canned = runCatching {
+        context.assets.open(PATH).bufferedReader().useLines { parse(it) }
+    }.getOrElse {
+        Log.i(TAG, "시연용 생성문 없음(${it.javaClass.simpleName})")
+        Canned.EMPTY
+    }.also { Log.i(TAG, "시연용 생성문 ${it.answers.size}줄 · 프로필 이름 ${it.forName}") }
+
+    /** 못 찾은 열쇠를 처음 몇 번만 적는다. 0 줄로 끝났을 때 **왜** 인지 알려면 이게 있어야 한다. */
+    private val 빗나간횟수 = java.util.concurrent.atomic.AtomicInteger(0)
+
+    override fun generate(key: String, system: String, user: String, timeoutMs: Long, onDone: (String?) -> Unit) {
+        val who = childName()
+        val got = answer(canned, who, key)
+        if (got == null) {
+            if (canned.forName != who) {
+                Log.i(TAG, "시연 프로필(${canned.forName})과 아이 이름($who)이 달라 생성을 쓰지 않는다")
+            } else if (빗나간횟수.incrementAndGet() <= 3) {
+                // 이름은 맞는데 열쇠가 없다 — 미리 만들 때와 꺼낼 때의 좌표가 어긋난 것이다.
+                Log.i(TAG, "시연용 열쇠 없음: $key (가진 열쇠 ${canned.answers.size}개, 예: ${canned.answers.keys.take(3)})")
+            }
+        }
+        onDone(got)
+    }
+
+    override fun close() = Unit
 }

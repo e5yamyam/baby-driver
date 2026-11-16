@@ -62,6 +62,13 @@ class MainActivity : AppCompatActivity() {
         intent.getIntExtra("age", 0).takeIf { it > 0 }?.let { Settings.setChildAge(this, it) }
         // 시연에서 화를 건너뛴다 — 작별(12화)을 보려고 열한 번 달릴 수는 없다
         intent.getIntExtra("episode", 0).takeIf { it > 0 }?.let { Journal(this).setEpisode(it) }
+        // ⛔ **시연 모드는 여기서 켜야 한다 — 서비스가 뜨기 전에.**
+        //    `StoryService.onCreate` 가 `Engine.start` 를 부르고, 거기서 `makeWriter` 가
+        //    설정을 **딱 한 번** 읽는다. `onStartCommand`(인텐트가 도착하는 자리)는 그보다 **뒤**다.
+        //    그래서 서비스 쪽에서 켜면 **그 주행에는 안 먹고 다음 주행부터** 먹는다 —
+        //    2026-11-17 녹화를 두 번 날렸다(`pm clear` 뒤 첫 실행이라 설정이 비어 있었고,
+        //    로그에는 `생성 타임아웃` 만 남아서 시연 모드가 안 켜진 줄을 못 봤다).
+        if (intent.getBooleanExtra("gen", false)) Settings.setDemoGenerateOn(this, true)
 
         // ⚠️ CAR_SPEED 는 런타임 권한이다. 받지 않으면 CarPropertyManager 가 속도를 목록에조차
         //    넣어 주지 않는다(2026-10-29 실측: 권한 없이 6개 / 받으면 9개 — PERF_VEHICLE_SPEED 포함).
@@ -77,6 +84,8 @@ class MainActivity : AppCompatActivity() {
             intent.getStringExtra("name")?.let { putExtra("name", it) }
             putExtra("route", intent.getBooleanExtra("route", false))
             putExtra("demo", intent.getBooleanExtra("demo", false))
+            // 시연 모드(미리 만든 생성문). 시연 녹화·발표에서만 쓴다 — `CannedBackend` 주석 참고.
+            putExtra("gen", intent.getBooleanExtra("gen", false))
             intent.getStringExtra("script")?.let { putExtra("script", it) }
             // 시연 하늘 고르기 — `--es sky night`. 밤 그림을 눈으로 확인하고 영상도 찍는다.
             intent.getStringExtra("sky")?.let { putExtra("sky", it) }

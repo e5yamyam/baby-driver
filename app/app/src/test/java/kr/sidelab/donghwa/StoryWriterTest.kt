@@ -42,6 +42,7 @@ class StoryWriterTest {
             private set
 
         override fun generate(
+            key: String,
             system: String,
             user: String,
             timeoutMs: Long,

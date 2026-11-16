@@ -267,7 +267,15 @@ object Engine {
                 level = AgeLevel.of(Settings.childAge(ctx)),
                 destination = { recording?.destination },
                 minutesLeft = { recording?.minutes },
-                backend = PleosBackend(ctx),
+                // ⭐ 시연 모드면 **미리 만들어 둔 답**을 읽는다 — 차 없는 자리에서
+                //    생성을 보여 주려면 이 길밖에 없다([CannedBackend] 주석).
+                //    사람이 설정에서 켜야 하고, 켜져 있으면 로그에 또렷이 남는다.
+                backend = if (Settings.demoGenerateOn(ctx)) {
+                    Log.i(TAG, "⚠️ 시연 모드 — 미리 만들어 둔 생성문을 읽는다(그 자리에서 만들지 않는다)")
+                    CannedBackend(ctx) { Settings.childName(ctx) }
+                } else {
+                    PleosBackend(ctx)
+                },
             )
         }.getOrElse {
             Log.w(TAG, "생성층 생성 실패(${it.message}) — 내장 이야기로 간다")
