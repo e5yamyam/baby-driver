@@ -97,9 +97,9 @@ class LlmWriter(
     val used = AtomicInteger(0)
     val filtered = AtomicInteger(0)
 
-    override fun ready(original: String): String? {
+    override fun ready(key: String): String? {
         if (closed.get()) return null
-        return cache.remove(original)
+        return cache.remove(key)
     }
 
     override fun prepare(requests: List<StoryWriter.Request>) {
@@ -107,17 +107,17 @@ class LlmWriter(
         for (r in requests) {
             // 뼈대는 건드리지 않는다 — 인과가 거기 걸려 있다.
             if (r.core) continue
-            if (cache.containsKey(r.original) || !inFlight.add(r.original)) continue
-            if (cache.size >= CACHE_MAX) { inFlight.remove(r.original); continue }
+            if (cache.containsKey(r.key) || !inFlight.add(r.key)) continue
+            if (cache.size >= CACHE_MAX) { inFlight.remove(r.key); continue }
             worker.execute { run(r) }
         }
     }
 
     private fun run(r: StoryWriter.Request) {
-        if (closed.get() || givenUp.get()) { inFlight.remove(r.original); return }
+        if (closed.get() || givenUp.get()) { inFlight.remove(r.key); return }
         val user = StoryPrompt.rewrite(r, destination(), minutesLeft())
         backend.generate(system, user, TIMEOUT_MS) { out ->
-            inFlight.remove(r.original)
+            inFlight.remove(r.key)
             if (closed.get()) return@generate
             if (out == null) {
                 // ⛔ 여기가 에뮬레이터가 떨어지는 자리다. 조용히 세고, 세 번이면 그만둔다.
@@ -135,9 +135,9 @@ class LlmWriter(
                 Log.i(TAG, "필터에 걸림, 내장 문장으로: $out")
                 return@generate
             }
-            cache[r.original] = safe
+            cache[r.key] = safe
             used.incrementAndGet()
-            Log.i(TAG, "생성: ${r.original} → $safe")
+            Log.i(TAG, "생성[${r.key}]: ${r.original} → $safe")
         }
     }
 

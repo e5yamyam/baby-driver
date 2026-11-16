@@ -108,10 +108,13 @@ class StoryWriterTest {
 
     @Test
     fun 세_살에게_긴_문장은_막는다() {
-        val 원문 = "구름이 통통 튀었어요."
-        val 긴줄 = "구름이 통통 튀어 오르더니 그제야 깔깔 웃으며 창밖을 바라보았어요."
-        assertNull(ChildFilter.check(긴줄, 원문, AgeLevel.TODDLER))
-        assertNotNull(ChildFilter.check(긴줄, 원문, AgeLevel.BIG))
+        // ⚠️ 원문을 짧게 두면 **나이가 아니라 길이 천장**([StoryPrompt.budget])에 먼저 걸려서
+        //    이 검사가 나이 규칙을 보는 게 아니게 된다(2026-11-16에 실제로 그랬다).
+        //    그래서 원문을 넉넉히 두고 **나이만 다르게** 본다.
+        val 원문 = "구름이 통통 튀어 오르더니 깔깔 웃었어요. 창밖이 환해졌어요."        // 34자
+        val 긴줄 = "구름이 통통 튀어 오르더니 깔깔 웃었어요. 창밖이 아주아주 환해졌어요."   // 39자
+        assertNull("세 살 상한 35자를 넘었다", ChildFilter.check(긴줄, 원문, AgeLevel.TODDLER))
+        assertNotNull("여덟 살에게는 39자가 길지 않다", ChildFilter.check(긴줄, 원문, AgeLevel.BIG))
     }
 
     @Test
@@ -259,8 +262,8 @@ class StoryWriterTest {
     /** 들어온 문장을 통째로 바꿔 주는 가짜 생성층. 연출이 안 흔들리는지 보는 용도. */
     private class 전부바꿈 : StoryWriter {
         val asked = mutableListOf<String>()
-        override fun ready(original: String): String? {
-            asked += original
+        override fun ready(key: String): String? {
+            asked += key
             return "생성된 문장입니다."
         }
         override fun prepare(requests: List<StoryWriter.Request>) = Unit

@@ -138,6 +138,8 @@ class StoryDirector(
     /** 장(章) 구성. 남은 시간이 길이를 정한다. */
     data class Plan(val totalSeconds: Int, val chapters: Int) {
         companion object {
+
+
             fun of(remainSeconds: Int): Plan {
                 val chapters = when {
                     remainSeconds < 10 * 60 -> 1      // 등하원
@@ -664,13 +666,24 @@ class StoryDirector(
      */
     private fun prefetch(ep: Episode) {
         if (writer === StoryWriter.None) return
+        val g = guest ?: return
         val at = peekIdx(ep) ?: return
         val reqs = ArrayList<StoryWriter.Request>(PREFETCH_PAGES)
         var i = at
         while (i < ep.pages.size && reqs.size < PREFETCH_PAGES) {
             val pg = ep.pages[i]
-            if (i !in readIdx && !pg.core && !(shortRide && !pg.core)) {
-                reqs += StoryWriter.Request(pg.text, pg.scene, pg.core)
+            val raw = pageSource(pg)
+            // ⛔ `{여기}` 를 쓰는 쪽은 생성에 안 건다. 미리 만들 때의 지명과 읽을 때의 지명이
+            //    다를 수 있고, 그러면 **아이에게 지나지도 않은 곳을 말하게 된다.**
+            if (raw != null && i !in readIdx && !pg.core && !shortRide && !raw.contains("{여기}")) {
+                reqs += StoryWriter.Request(
+                    // ⛔ **채워서 보낸다.** 날글을 보내면 모델이 `{아이}` 를 베껴 오고
+                    //    [ChildFilter] 의 자리표시자 검사가 그 줄을 통째로 막는다(실측 12건 중 5건).
+                    original = fill(raw, g, here = lastPlace),
+                    scene = pg.scene,
+                    core = pg.core,
+                    key = genKey(ep, i),
+                )
             }
             i += 1
         }
@@ -753,7 +766,37 @@ class StoryDirector(
         seenScenes += sc
         // 한 쪽을 읽었으니 다음 쪽들을 미리 생성에 걸어 둔다(아이가 기다리지 않게).
         prefetch(ep)
-        return Beat(fill(line, g, here = lastPlace), keep = true, scene = sc, voiced = true)
+        val spoken = fill(line, g, here = lastPlace)
+        // ⭐ **생성이 문장을 바꾸는 자리는 여기다.** [gate] 는 멀미 안내 한 줄에만 들르고
+        //    책 본문은 거기를 지나지 않는다 — 그래서 생성층을 붙여도 **책에는 한 줄도 안 닿았다**
+        //    (2026-11-16 실측: 65분 주행에 12줄을 만들어 놓고 아이에게 나간 건 0줄).
+        //    책을 내보내는 곳이 [read] 이므로 꺼내 쓰는 자리도 여기여야 한다.
+        // ⛔ 길을 못 만나 대신 읽는 중([needsAlt])이면 생성을 쓰지 않는다 — 생성은
+        //    [BookPage.text] 로 만들어 뒀는데 지금 읽는 건 [BookPage.alt] 다.
+        //    내용이 다른 문장을 그 자리에 끼우면 **없던 길을 봤다고 말하게 된다.**
+        val made = if (needsAlt) null else writer.ready(genKey(ep, idx))
+        return Beat(made ?: spoken, keep = true, scene = sc, voiced = true)
+    }
+
+    /**
+     * 생성 열쇠 — `시즌:화:쪽:나이`.
+     *
+     * 원문 문장을 열쇠로 쓰면 **자리표시자 때문에 영원히 안 맞는다**([StoryWriter.ready] 주석).
+     * 나이를 넣는 이유: 세 살에게는 [BookPage.short] 가 나가므로 같은 쪽이라도 **다른 문장**이다.
+     */
+    private fun genKey(ep: Episode, idx: Int): String = "${season.id}:${ep.no}:$idx:$level"
+
+    /**
+     * 그 쪽에서 **이 나이에게 실제로 나갈 날글**. 없으면 그 쪽은 안 읽는다.
+     *
+     * [read] 의 문장 고르기와 **같은 규칙**이어야 한다 — 어긋나면 생성이 엉뚱한 문장을 다시 쓴다.
+     * (길을 못 만나 대신 읽는 경우는 여기서 다루지 않는다. 그때는 [read] 가 생성을 아예 안 쓴다.)
+     */
+    private fun pageSource(pg: BookPage): String? = when {
+        level != AgeLevel.TODDLER -> pg.text
+        pg.short != null -> pg.short
+        pg.core -> pg.text
+        else -> null
     }
 
     /**
@@ -982,41 +1025,6 @@ class StoryDirector(
             .replace("{여기}", here ?: "이 길")
             .replace("{탈것}", season.vehicle),
     )
-
-    /**
-     * 조사를 **앞 글자를 보고** 정한다. 이름이나 지명이 들어간 **뒤에** 풀어야 맞는다.
-     * 먼저 풀면 "에버랜드을", "서준 머리"가 된다(2026-10-29 시연에서 둘 다 나왔다).
-     *
-     * `{을}`→을/를 · `{는}`→은/는 · `{가}`→이/가 · `{과}`→과/와 ·
-     * `{이}`→이름 뒤 "이"(서준이 / 지우) · `{호격}`→아/야
-     */
-    private fun particles(text: String): String {
-        val out = StringBuilder()
-        var i = 0
-        while (i < text.length) {
-            val open = text.indexOf('{', i)
-            if (open < 0) { out.append(text, i, text.length); break }
-            out.append(text, i, open)
-            val close = text.indexOf('}', open)
-            if (close < 0) { out.append(text, open, text.length); break }
-            val tok = text.substring(open + 1, close)
-            val prev = out.lastOrNull()
-            val final = prev != null && prev in '가'..'힣' && (prev - '가') % 28 != 0
-            out.append(
-                when (tok) {
-                    "을" -> if (final) "을" else "를"
-                    "는" -> if (final) "은" else "는"
-                    "가" -> if (final) "이" else "가"
-                    "과" -> if (final) "과" else "와"
-                    "이" -> if (final) "이" else ""
-                    "호격" -> if (final) "아" else "야"
-                    else -> "{$tok}"
-                },
-            )
-            i = close + 1
-        }
-        return out.toString()
-    }
 
     /**
      * 남은 시간이 바뀠다. **얼마나 어긋났는지**는 "원래 남아 있어야 할 시간"과 비교해서 안다 —
@@ -1341,4 +1349,44 @@ class StoryDirector(
         )
         const val GROW_THRESHOLD_SEC = 5 * 60
     }
+}
+
+/**
+ * 조사를 **앞 글자를 보고** 정한다. 이름이나 지명이 들어간 **뒤에** 풀어야 맞는다.
+ * 먼저 풀면 "에버랜드을", "서준 머리"가 된다(2026-10-29 시연에서 둘 다 나왔다).
+ *
+ * `{을}`→을/를 · `{는}`→은/는 · `{가}`→이/가 · `{과}`→과/와 ·
+ * `{이}`→이름 뒤 "이"(서준이 / 지우) · `{호격}`→아/야
+ *
+ * ⛔ **앱과 검사가 같은 코드를 써야 한다.** 2026-11-16: `gen_probe.py` 용 지시문을 내보낼 때
+ *    `{가}` 를 그냥 "가" 로 바꿨더니 모델에게 **`구름가`·`별이이` 같은 틀린 한국어**를 보냈다.
+ *    모델이 알아서 고쳐 주는 바람에 겉으로는 멀쩡해 보였지만 그건 지시문을 검사한 게 아니다.
+ *    그래서 클래스 안의 `private` 을 떼고 **최상위**에 한 벌만 둔다.
+ */
+fun particles(text: String): String {
+    val out = StringBuilder()
+    var i = 0
+    while (i < text.length) {
+        val open = text.indexOf('{', i)
+        if (open < 0) { out.append(text, i, text.length); break }
+        out.append(text, i, open)
+        val close = text.indexOf('}', open)
+        if (close < 0) { out.append(text, open, text.length); break }
+        val tok = text.substring(open + 1, close)
+        val prev = out.lastOrNull()
+        val final = prev != null && prev in '가'..'힣' && (prev - '가') % 28 != 0
+        out.append(
+            when (tok) {
+                "을" -> if (final) "을" else "를"
+                "는" -> if (final) "은" else "는"
+                "가" -> if (final) "이" else "가"
+                "과" -> if (final) "과" else "와"
+                "이" -> if (final) "이" else ""
+                "호격" -> if (final) "아" else "야"
+                else -> "{$tok}"
+            },
+        )
+        i = close + 1
+    }
+    return out.toString()
 }
